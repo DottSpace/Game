@@ -2,6 +2,7 @@ import requests
 import json
 import os
 import time
+import random
 
 # Definizione dei colori ANSI
 COLORS = {
@@ -16,166 +17,182 @@ COLORS = {
     "white": "\033[37m",
     "gray": "\033[90m",
     "orange": "\033[33m",  # Usiamo giallo per simulare arancione
+    "bold": "\033[1m",     # Grassetto
+    "underline": "\033[4m" # Sottolineato
 }
 
 # Funzione per cancellare lo schermo
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
 
-# Funzione per stampare il saldo
-def print_balance(balance):
-    print(f"Saldo attuale: {balance} denaro")
+# Funzione per stampare informazioni utente
+def print_user_info(username, saldo, level, exp):
+    print(f"{COLORS['bold']}=== INFO GIOCATORE ==={COLORS['reset']}")
+    print(f"Utente: {COLORS['green']}{username}{COLORS['reset']}")
+    print(f"Livello: {COLORS['cyan']}{level}{COLORS['reset']}")
+    print(f"Esperienza: {COLORS['blue']}{exp}{COLORS['reset']}")
+    print(f"Saldo: {COLORS['yellow']}{saldo} denaro{COLORS['reset']}")
+    print()
 
-# Funzione per visualizzare l'inventario
-def show_inventory(inventory):
+# Funzione per stampare le statistiche del personaggio
+def print_stats(stats, equipped):
+    print(f"{COLORS['bold']}=== STATISTICHE PERSONAGGIO ==={COLORS['reset']}")
+    print(f"Salute: {COLORS['red']}{stats['health']}{COLORS['reset']}")
+    print(f"Danno: {COLORS['orange']}{stats['damage']}{COLORS['reset']}")
+    print(f"Difesa: {COLORS['blue']}{stats['defense']}{COLORS['reset']}")
+    print()
+    
+    print(f"{COLORS['bold']}=== EQUIPAGGIAMENTO ==={COLORS['reset']}")
+    if "weapon" in equipped:
+        print(f"Arma: {COLORS['orange']}{equipped['weapon']}{COLORS['reset']}")
+    else:
+        print(f"Arma: {COLORS['gray']}Nessuna{COLORS['reset']}")
+    
+    if "armor" in equipped:
+        print(f"Armatura: {COLORS['blue']}{equipped['armor']}{COLORS['reset']}")
+    else:
+        print(f"Armatura: {COLORS['gray']}Nessuna{COLORS['reset']}")
+    
+    if "amulet" in equipped:
+        print(f"Amuleto: {COLORS['purple']}{equipped['amulet']}{COLORS['reset']}")
+    else:
+        print(f"Amuleto: {COLORS['gray']}Nessuno{COLORS['reset']}")
+    print()
+
+# Funzione per visualizzare l'inventario dettagliato
+def show_inventory(inventory, equipped):
     clear()
-    print("=== INVENTARIO ===")
+    print(f"{COLORS['bold']}=== INVENTARIO ==={COLORS['reset']}")
+    
     if not inventory:
         print("Il tuo inventario è vuoto!")
     else:
-        # Conteggio degli oggetti per tipo
-        item_counts = {}
-        for item in inventory:
-            if item in item_counts:
-                item_counts[item] += 1
-            else:
-                item_counts[item] = 1
-                
-        # Visualizzazione ordinata per rarità
-        rarities_order = ["Mitico", "Leggendario", "Epico", "Raro", "Comune", "Spazzatura"]
+        # Ordina gli oggetti per tipo e rarità
+        items_by_type = {
+            "weapon": [],
+            "armor": [],
+            "amulet": []
+        }
         
-        for rarity in rarities_order:
-            if rarity in item_counts:
-                color = COLORS["green"]  # Default color
-                if rarity == "Spazzatura":
-                    color = COLORS["black"]
-                elif rarity == "Comune":
-                    color = COLORS["gray"]
-                elif rarity == "Raro":
-                    color = COLORS["blue"]
-                elif rarity == "Epico":
-                    color = COLORS["purple"]
-                elif rarity == "Leggendario":
-                    color = COLORS["yellow"]
-                elif rarity == "Mitico":
-                    color = COLORS["orange"]
-                
-                print(f"{color}{rarity} - {item_counts[rarity]}x{COLORS['reset']}")
+        for item in inventory:
+            item_type = item["type"]
+            if item_type in items_by_type:
+                items_by_type[item_type].append(item)
+        
+        # Rarità in ordine decrescente
+        rarities_order = {"Mitico": 6, "Leggendario": 5, "Epico": 4, "Raro": 3, "Comune": 2, "Spazzatura": 1}
+        
+        # Visualizza armi
+        if items_by_type["weapon"]:
+            print(f"\n{COLORS['bold']}ARMI:{COLORS['reset']}")
+            sorted_weapons = sorted(items_by_type["weapon"], key=lambda x: rarities_order.get(x["rarity"], 0), reverse=True)
+            for item in sorted_weapons:
+                color = get_rarity_color(item["rarity"])
+                equipped_marker = f" {COLORS['green']}[EQUIPAGGIATO]{COLORS['reset']}" if "weapon" in equipped and equipped["weapon"] == item["name"] else ""
+                print(f"{color}{item['name']}{COLORS['reset']} - {color}{item['rarity']}{COLORS['reset']} (Danno: {item['stats']['damage']}{equipped_marker})")
+        
+        # Visualizza armature
+        if items_by_type["armor"]:
+            print(f"\n{COLORS['bold']}ARMATURE:{COLORS['reset']}")
+            sorted_armors = sorted(items_by_type["armor"], key=lambda x: rarities_order.get(x["rarity"], 0), reverse=True)
+            for item in sorted_armors:
+                color = get_rarity_color(item["rarity"])
+                equipped_marker = f" {COLORS['green']}[EQUIPAGGIATO]{COLORS['reset']}" if "armor" in equipped and equipped["armor"] == item["name"] else ""
+                print(f"{color}{item['name']}{COLORS['reset']} - {color}{item['rarity']}{COLORS['reset']} (Difesa: {item['stats']['defense']}{equipped_marker})")
+        
+        # Visualizza amuleti
+        if items_by_type["amulet"]:
+            print(f"\n{COLORS['bold']}AMULETI:{COLORS['reset']}")
+            sorted_amulets = sorted(items_by_type["amulet"], key=lambda x: rarities_order.get(x["rarity"], 0), reverse=True)
+            for item in sorted_amulets:
+                color = get_rarity_color(item["rarity"])
+                equipped_marker = f" {COLORS['green']}[EQUIPAGGIATO]{COLORS['reset']}" if "amulet" in equipped and equipped["amulet"] == item["name"] else ""
+                effect_text = get_effect_text(item["stats"]["effect"], item["stats"]["bonus"])
+                print(f"{color}{item['name']}{COLORS['reset']} - {color}{item['rarity']}{COLORS['reset']} ({effect_text}{equipped_marker})")
     
-    print("\nPremi invio per tornare.")
-    input()
-
-# Funzione per aprire la lootbox
-def open_lootbox():
-    clear()
-    print("Scegli una lootbox:")
-    print(f"1. Lootbox Rara - 10 denaro ({COLORS['black']}Spazzatura 50%{COLORS['reset']}, {COLORS['gray']}Comune 30%{COLORS['reset']}, {COLORS['blue']}Raro 15%{COLORS['reset']}, {COLORS['purple']}Epico 5%{COLORS['reset']})")
-    print(f"2. Lootbox Epica - 30 denaro ({COLORS['gray']}Comune 40%{COLORS['reset']}, {COLORS['blue']}Raro 30%{COLORS['reset']}, {COLORS['purple']}Epico 20%{COLORS['reset']}, {COLORS['yellow']}Leggendario 10%{COLORS['reset']})")
-    print(f"3. Lootbox Leggendaria - 50 denaro ({COLORS['blue']}Raro 40%{COLORS['reset']}, {COLORS['purple']}Epico 30%{COLORS['reset']}, {COLORS['yellow']}Leggendario 20%{COLORS['reset']}, {COLORS['orange']}Mitico 10%{COLORS['reset']})")
-    print(f"4. Lootbox Mitica - 100 denaro ({COLORS['purple']}Epico 30%{COLORS['reset']}, {COLORS['yellow']}Leggendario 30%{COLORS['reset']}, {COLORS['orange']}Mitico 30%{COLORS['reset']}, {COLORS['blue']}Raro 10%{COLORS['reset']})")
-    print("b. Torna indietro")
+    print("\n1. Equipaggia oggetto")
+    print("2. Rimuovi oggetto equipaggiato")
+    print("3. Torna al menu principale")
     
-    choice = input("Scegli un numero: ")
-    if choice == 'b':
-        return None
+    choice = input("\nScelta: ")
+    return choice
+
+# Funzione per ottenere il colore di una rarità
+def get_rarity_color(rarity):
+    if rarity == "Spazzatura":
+        return COLORS["black"]
+    elif rarity == "Comune":
+        return COLORS["gray"]
+    elif rarity == "Raro":
+        return COLORS["blue"]
+    elif rarity == "Epico":
+        return COLORS["purple"]
+    elif rarity == "Leggendario":
+        return COLORS["yellow"]
+    elif rarity == "Mitico":
+        return COLORS["orange"]
+    return COLORS["reset"]
+
+# Funzione per ottenere la descrizione testuale dell'effetto di un amuleto
+def get_effect_text(effect, bonus):
+    if effect == "health":
+        return f"Salute +{bonus}"
+    elif effect == "damage":
+        return f"Danno +{bonus}"
+    elif effect == "defense":
+        return f"Difesa +{bonus}"
+    elif effect == "all":
+        return f"Tutte le statistiche +{bonus}"
+    return ""
+
+# Funzione per equipaggiare un oggetto
+def equip_item(username, inventory, equipped):
+    clear()
+    print(f"{COLORS['bold']}=== EQUIPAGGIA OGGETTO ==={COLORS['reset']}")
     
-    lootbox_types = {"1": "rara", "2": "epica", "3": "leggendaria", "4": "mitica"}
-    return lootbox_types.get(choice)
-
-# Funzione per il login dell'utente
-def login():
-    clear()
-    username = input("Inserisci il tuo username: ")
-    try:
-        response = requests.post('http://127.0.0.1:5000/login', json={"username": username})
-        data = response.json()
-
-        if data['status'] == 'success':
-            print(f"Benvenuto {username}! Il tuo saldo è: {data['saldo']}")
-            time.sleep(1)
-            return username, data['saldo'], data['inventario']
-        else:
-            print("Errore nel login.")
-            time.sleep(1)
-            return None, 0, []
-    except requests.exceptions.ConnectionError:
-        print("Errore di connessione al server. Assicurati che il server sia in esecuzione.")
-        time.sleep(2)
-        return None, 0, []
-
-# Funzione per mostrare i risultati della lootbox
-def show_lootbox_results(loot):
-    clear()
-    print("=== HAI TROVATO ===")
-    if not loot:
-        print("Nessun oggetto trovato!")
+    # Organizza gli oggetti per tipo
+    items_by_type = {
+        "weapon": [],
+        "armor": [],
+        "amulet": []
+    }
+    
+    for i, item in enumerate(inventory):
+        item_type = item["type"]
+        if item_type in items_by_type:
+            items_by_type[item_type].append((i, item))
+    
+    # Mostra lista di oggetti numerati
+    print("\nArmi:")
+    if not items_by_type["weapon"]:
+        print("Nessuna arma disponibile.")
     else:
-        for item in loot:
-            color = COLORS["green"]  # Default color
-            if item == "Spazzatura":
-                color = COLORS["black"]
-            elif item == "Comune":
-                color = COLORS["gray"]
-            elif item == "Raro":
-                color = COLORS["blue"]
-            elif item == "Epico":
-                color = COLORS["purple"]
-            elif item == "Leggendario":
-                color = COLORS["yellow"]
-            elif item == "Mitico":
-                color = COLORS["orange"]
-            
-            print(f"{color}{item}{COLORS['reset']}")
+        for i, (index, item) in enumerate(items_by_type["weapon"]):
+            color = get_rarity_color(item["rarity"])
+            equipped_marker = " [EQUIPAGGIATO]" if "weapon" in equipped and equipped["weapon"] == item["name"] else ""
+            print(f"{i+1}. {color}{item['name']}{COLORS['reset']} - {color}{item['rarity']}{COLORS['reset']} (Danno: {item['stats']['damage']}){equipped_marker}")
     
-    print("\nPremi invio per continuare...")
-    input()
-
-# Funzione principale per il gioco
-def main():
-    username, saldo, inventory = login()
-
-    if not username:
-        return
-
-    while True:
-        clear()
-        print(f"=== LOOTBOX GAME ===")
-        print(f"Utente: {username}")
-        print_balance(saldo)
-        print("\nCosa vuoi fare?")
-        print("1. Apri Lootbox")
-        print("2. Vedi Inventario")
-        print("q. Esci")
-
-        choice = input("Scegli un'opzione: ")
-
-        if choice == '1':
-            lootbox_type = open_lootbox()
-            if lootbox_type:
-                try:
-                    response = requests.post('http://127.0.0.1:5000/buy_lootbox', 
-                                           json={'username': username, 'lootbox_type': lootbox_type})
-                    data = response.json()
-                    if data['status'] == 'success':
-                        saldo = data['saldo']
-                        inventory.extend(data['loot'])  # Aggiorna l'inventario locale
-                        show_lootbox_results(data['loot'])
-                    else:
-                        print(data['message'])
-                        input("\nPremi invio per continuare...")
-                except requests.exceptions.ConnectionError:
-                    print("Errore di connessione al server.")
-                    input("\nPremi invio per continuare...")
-        elif choice == '2':
-            show_inventory(inventory)
-        elif choice == 'q':
-            clear()
-            print("Grazie per aver giocato! Arrivederci.")
-            time.sleep(1)
-            break
-        else:
-            print("Opzione non valida. Riprova.")
-            time.sleep(1)
-
-if __name__ == '__main__':
-    main()
+    print("\nArmature:")
+    if not items_by_type["armor"]:
+        print("Nessuna armatura disponibile.")
+    else:
+        for i, (index, item) in enumerate(items_by_type["armor"]):
+            color = get_rarity_color(item["rarity"])
+            equipped_marker = " [EQUIPAGGIATO]" if "armor" in equipped and equipped["armor"] == item["name"] else ""
+            print(f"{len(items_by_type['weapon'])+i+1}. {color}{item['name']}{COLORS['reset']} - {color}{item['rarity']}{COLORS['reset']} (Difesa: {item['stats']['defense']}){equipped_marker}")
+    
+    print("\nAmuleti:")
+    if not items_by_type["amulet"]:
+        print("Nessun amuleto disponibile.")
+    else:
+        for i, (index, item) in enumerate(items_by_type["amulet"]):
+            color = get_rarity_color(item["rarity"])
+            equipped_marker = " [EQUIPAGGIATO]" if "amulet" in equipped and equipped["amulet"] == item["name"] else ""
+            effect_text = get_effect_text(item["stats"]["effect"], item["stats"]["bonus"])
+            print(f"{len(items_by_type['weapon'])+len(items_by_type['armor'])+i+1}. {color}{item['name']}{COLORS['reset']} - {color}{item['rarity']}{COLORS['reset']} ({effect_text}){equipped_marker}")
+    
+    print("\n0. Torna indietro")
+    
+    try:
+        choice = int(input("\nScegli un oggetto da equipaggiare: "))
+        if choice == 
